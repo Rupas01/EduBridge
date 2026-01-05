@@ -6,6 +6,8 @@ yarn-error.log*
 
 # Environment variables
 .env
+backend/.env
+frontend/.env
 
 # Expo / React Native
 .expo/
