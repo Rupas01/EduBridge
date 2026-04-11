@@ -29,6 +29,21 @@ router.post('/', auth, async (req, res) => {
     }
 });
 
+// @route    GET api/bits/trending
+router.get('/trending', async (req, res) => {
+    try {
+        // FIX: Changed .populate('user') to .populate('creator')
+        const bits = await Bit.find()
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .populate('creator', 'username');
+        res.json(bits);
+    } catch (err) {
+        console.error("Trending Bits Error:", err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET api/bits
 // @desc    Get all Bits for a feed
 // @access  Private

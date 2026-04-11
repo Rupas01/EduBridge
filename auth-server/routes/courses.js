@@ -8,6 +8,71 @@ const Module = require('../models/Module');
 const Quiz = require('../models/Quiz');
 const Progress = require('../models/Progress');
 
+// @route    GET api/courses
+// @desc     Get all courses (for the Explore screen recommendations)
+router.get('/', auth, async (req, res) => {
+    try {
+        // Fetch all courses and populate mentor info
+        const courses = await Course.find()
+            .populate('mentor', 'username profilePictureUrl')
+            .sort({ createdAt: -1 })
+            .limit(10); // Limit to 10 for performance
+
+        res.json(courses);
+    } catch (err) {
+        console.error("Fetch All Courses Error:", err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+
+// @route    GET api/courses/enrolled
+router.get('/enrolled', auth, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        const courses = await Course.find({ _id: { $in: user.enrolledCourses } })
+            .populate('mentor', 'username')
+            .lean();
+
+        // Calculate progress for each course
+        const enrichedCourses = await Promise.all(courses.map(async (course) => {
+            const progress = await Progress.findOne({ user: req.user.id, course: course._id });
+            
+            // Count total items (lessons inside modules + standalone quizzes)
+            let totalItems = 0;
+            const modules = await Module.find({ course: course._id });
+            modules.forEach(m => totalItems += m.lessons.length);
+            const quizzes = await Quiz.find({ course: course._id });
+            totalItems += quizzes.length;
+
+            const completedCount = (progress?.completedLessons?.length || 0) + (progress?.completedQuizzes?.length || 0);
+            const percentage = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+
+            return {
+                ...course,
+                progressPercentage: percentage,
+                isCompleted: percentage === 100 && totalItems > 0
+            };
+        }));
+
+        res.json(enrichedCourses);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route    GET api/courses/saved
+router.get('/saved', auth, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        const courses = await Course.find({ _id: { $in: user.savedCourses } })
+            .populate('mentor', 'username');
+        res.json(courses);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET api/courses/:id
 router.get('/:id', auth, async (req, res) => {
     try {
@@ -84,7 +149,6 @@ router.get('/:id', auth, async (req, res) => {
             course.curriculum = course.curriculum.filter(entry => !entry.hidden);
         }
 
-        // 3. PERFORMANCE ANALYTICS CALCULATION
         let totalQuizPercentage = 0;
         let quizzesAttempted = completedQuizzes.length;
 
@@ -126,139 +190,45 @@ router.get('/:id', auth, async (req, res) => {
     }
 });
 
-// ... Keep the rest of your file (POST modules, enroll, etc.) as is ...
-
-// @route   POST api/courses/:id/complete-lesson
-// @desc    Mark a lesson as completed for the current user
-router.post('/:id/complete-lesson', auth, async (req, res) => {
-    const { lessonId } = req.body;
-    const courseId = req.params.id;
-
-    try {
-        let progress = await Progress.findOne({ user: req.user.id, course: courseId });
-
-        if (!progress) {
-            // Create progress doc if it doesn't exist (first lesson completed)
-            progress = new Progress({
-                user: req.user.id,
-                course: courseId,
-                completedLessons: [lessonId]
-            });
-        } else {
-            // Add lesson only if not already present
-            if (!progress.completedLessons.includes(lessonId)) {
-                progress.completedLessons.push(lessonId);
-            }
-        }
-
-        progress.lastAccessed = Date.now();
-        await progress.save();
-
-        res.json(progress);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
-    }
-});
-
 // @route   POST api/courses
-// @desc    Create a new course
-// @access  Private
 router.post('/', auth, async (req, res) => {
     const { title, description, category, thumbnailUrl } = req.body;
-
     if (!title || !description || !category) {
         return res.status(400).json({ msg: 'Please enter all required fields.' });
     }
-
     try {
         const newCourse = new Course({
-            title,
-            description,
-            category,
-            thumbnailUrl,
+            title, description, category, thumbnailUrl,
             mentor: req.user.id
         });
-
         const course = await newCourse.save();
         res.status(201).json(course);
-
     } catch (err) {
-        console.error(err.message);
         res.status(500).send('Server Error');
-    }
-});
-
-// POST Add Module
-// @route   POST api/courses/:id/modules
-router.post('/:id/modules', auth, async (req, res) => {
-    try {
-        const course = await Course.findById(req.params.id);
-        if (!course) return res.status(404).json({ msg: 'Course not found' });
-
-        // Ensure the person adding the module is the mentor
-        if (course.mentor.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'Not authorized' });
-        }
-
-        // 1. Create the Module document
-        const newModule = new Module({
-            title: req.body.title,
-            course: req.params.id,
-            lessons: []
-        });
-        const savedModule = await newModule.save();
-
-        // 2. Add it to the Course Curriculum array
-        course.curriculum.push({
-            type: 'module',
-            item: savedModule._id,
-            typeModel: 'Module' // This matches the 'refPath' logic in Course.js
-        });
-
-        await course.save();
-
-        // 3. Return the saved module to the frontend
-        res.json(savedModule);
-    } catch (err) {
-        console.error("Detailed Module Error:", err);
-        res.status(500).json({ msg: 'Server Error', error: err.message });
     }
 });
 
 // @route   POST api/courses/:id/enroll
-// @desc    Enroll the current user in a course
-// @access  Private
 router.post('/:id/enroll', auth, async (req, res) => {
     try {
         const courseId = req.params.id;
         const user = await User.findById(req.user.id);
-
         if (user.enrolledCourses.includes(courseId)) {
-            return res.status(400).json({ msg: 'Already enrolled in this course' });
+            return res.status(400).json({ msg: 'Already enrolled' });
         }
-
         user.enrolledCourses.push(courseId);
         await user.save();
         res.json(user.enrolledCourses);
-
     } catch (err) {
-        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
 
 // @route   DELETE api/courses/:id/enroll
-// @desc    Unenroll from a course
 router.delete('/:id/enroll', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-
-        // Remove the courseId from the array
-        user.enrolledCourses = user.enrolledCourses.filter(
-            id => id.toString() !== req.params.id
-        );
-
+        user.enrolledCourses = user.enrolledCourses.filter(id => id.toString() !== req.params.id);
         await user.save();
         res.json({ msg: 'Successfully unenrolled', enrolledCourses: user.enrolledCourses });
     } catch (err) {
@@ -266,23 +236,54 @@ router.delete('/:id/enroll', auth, async (req, res) => {
     }
 });
 
+// @route   POST api/courses/:id/complete-lesson
+router.post('/:id/complete-lesson', auth, async (req, res) => {
+    const { lessonId } = req.body;
+    const courseId = req.params.id;
+    try {
+        let progress = await Progress.findOne({ user: req.user.id, course: courseId });
+        if (!progress) {
+            progress = new Progress({ user: req.user.id, course: courseId, completedLessons: [lessonId] });
+        } else {
+            if (!progress.completedLessons.includes(lessonId)) {
+                progress.completedLessons.push(lessonId);
+            }
+        }
+        progress.lastAccessed = Date.now();
+        await progress.save();
+        res.json(progress);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST api/courses/:id/modules
+router.post('/:id/modules', auth, async (req, res) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) return res.status(404).json({ msg: 'Course not found' });
+        if (course.mentor.toString() !== req.user.id) return res.status(401).json({ msg: 'Not authorized' });
+
+        const newModule = new Module({ title: req.body.title, course: req.params.id, lessons: [] });
+        const savedModule = await newModule.save();
+
+        course.curriculum.push({ type: 'module', item: savedModule._id, typeModel: 'Module' });
+        await course.save();
+        res.json(savedModule);
+    } catch (err) {
+        res.status(500).json({ msg: 'Server Error', error: err.message });
+    }
+});
+
 // @route   POST api/courses/:id/lessons
 router.post('/:id/lessons', auth, async (req, res) => {
     const { title, description, contentType, content, videoUrl, moduleId } = req.body;
     try {
-        // Strict Rule: Articles/Videos must have a module
-        if (!moduleId || moduleId === "null" || moduleId === "") {
-            return res.status(400).json({ msg: "Content must be added to a module." });
-        }
+        if (!moduleId || moduleId === "null" || moduleId === "") return res.status(400).json({ msg: "Module required." });
 
         const newLesson = new Lesson({
-            title,
-            // Fallback for Articles so AI has context later
+            title, contentType, content, videoUrl, course: req.params.id,
             description: contentType === 'blog' ? (content?.substring(0, 200) + "...") : description,
-            contentType,
-            content,
-            videoUrl,
-            course: req.params.id
         });
 
         const savedLesson = await newLesson.save();
@@ -298,17 +299,11 @@ router.post('/:id/lessons', auth, async (req, res) => {
 });
 
 // @route   DELETE api/courses/lessons/:id
-// @desc    Delete a lesson and remove its reference from the module
 router.delete('/lessons/:id', auth, async (req, res) => {
     try {
         const lesson = await Lesson.findById(req.params.id);
         if (!lesson) return res.status(404).json({ msg: 'Lesson not found' });
-
-        await Module.updateMany(
-            { lessons: req.params.id },
-            { $pull: { lessons: req.params.id } }
-        );
-
+        await Module.updateMany({ lessons: req.params.id }, { $pull: { lessons: req.params.id } });
         await Lesson.findByIdAndDelete(req.params.id);
         res.json({ msg: 'Lesson removed' });
     } catch (err) {

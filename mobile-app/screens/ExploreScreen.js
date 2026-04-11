@@ -1,143 +1,158 @@
-import React, { useState } from 'react';
-import {
-    View, Text, StyleSheet, TextInput, FlatList,
-    TouchableOpacity, SafeAreaView, ActivityIndicator
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    View, Text, StyleSheet, TextInput, FlatList, 
+    TouchableOpacity, Image, ScrollView, ActivityIndicator,
+    RefreshControl // Added for swipe to refresh
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config';
 
 const ExploreScreen = ({ navigation }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterType, setFilterType] = useState('people');
-    const [results, setResults] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [message, setMessage] = useState('Search for creators, courses, and more!');
-    const [showFilters, setShowFilters] = useState(false);
+    const [search, setSearch] = useState('');
+    const [trendingBits, setTrendingBits] = useState([]);
+    const [recommendedCourses, setRecommendedCourses] = useState([]); // New State
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false); // New state for RefreshControl
 
-    const handleSearch = async (currentFilter = filterType) => {
-        if (!searchTerm.trim()) {
-            setResults([]);
-            setMessage('Please enter a search term.');
-            return;
-        }
-        setIsLoading(true);
-        setMessage('');
-        setShowFilters(true);
+    const fetchDiscoveryData = useCallback(async () => {
         try {
-            const response = await axios.get(`${API_URL}/search`, {
-                params: { term: searchTerm, type: currentFilter }
-            });
-            setResults(response.data);
-            if (response.data.length === 0) {
-                setMessage('No results found.');
-            }
-        } catch (error) {
-            console.error("Search failed:", error);
-            setMessage('Failed to perform search.');
+            const token = await AsyncStorage.getItem('userToken');
+            // Fetching both Bits and Recommended Courses simultaneously
+            const [bitsRes, coursesRes] = await Promise.all([
+                axios.get(`${API_URL}/bits/trending`, { headers: { 'x-auth-token': token } }),
+                axios.get(`${API_URL}/courses`, { headers: { 'x-auth-token': token } }) // Fetching all/featured courses
+            ]);
+            
+            setTrendingBits(bitsRes.data);
+            setRecommendedCourses(coursesRes.data.slice(0, 6)); // Show first 6 as recommendations
+        } catch (e) {
+            console.error("Explore Fetch Error:", e);
         } finally {
-            setIsLoading(false);
+            setLoading(false);
         }
+    }, []);
+
+    // Function specifically for handling the pull-to-refresh action
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchDiscoveryData();
+        setRefreshing(false);
+    }, [fetchDiscoveryData]);
+
+    useEffect(() => { fetchDiscoveryData(); }, [fetchDiscoveryData]);
+
+    const handleSearch = () => {
+        if (!search.trim()) return;
+        navigation.navigate('SearchResults', { query: search });
     };
 
-    const handleFilterChange = (newFilter) => {
-        setFilterType(newFilter);
-        if (searchTerm.trim()) {
-            handleSearch(newFilter);
-        }
-    };
-    
-    const renderItem = ({ item, index }) => {
-        switch (filterType) {
-            case 'people':
-                return (
-                    <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: item._id })}>
-                        <View style={styles.resultItem}>
-                            <Ionicons name="person-circle-outline" size={40} color="#555" />
-                            <View style={styles.resultTextContainer}>
-                                <Text style={styles.resultText}>{item.firstName} {item.lastName}</Text>
-                                <Text style={styles.resultSubText}>@{item.username}</Text>
-                            </View>
-                            {/* The follow button has been removed from here */}
-                        </View>
-                    </TouchableOpacity>
-                );
-            case 'courses':
-                return (
-                    <TouchableOpacity onPress={() => navigation.navigate('CourseDetail', { courseId: item._id })}>
-                        <View style={styles.resultItem}>
-                            <Ionicons name="play-circle-outline" size={40} color="#555" />
-                            <View style={styles.resultTextContainer}>
-                                <Text style={styles.resultText}>{item.title}</Text>
-                                <Text style={styles.resultSubText}>by {item.mentor?.firstName} {item.mentor?.lastName}</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-                );
-            case 'bits':
-                return (
-                    <TouchableOpacity onPress={() => navigation.navigate('Bits', { bits: results, initialScrollIndex: index })}>
-                        <View style={styles.resultItem}>
-                            <Ionicons name="videocam-outline" size={40} color="#555" />
-                            <View style={styles.resultTextContainer}>
-                                <Text style={styles.resultText}>{item.title}</Text>
-                                <Text style={styles.resultSubText}>by {item.creator?.firstName} {item.creator?.lastName}</Text>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-                );
-            default:
-                return null;
-        }
-    };
+    const categories = [
+        { id: 'c1', name: 'Programming', icon: 'code-slash', color: '#E3F2FD' },
+        { id: 'c2', name: 'Design', icon: 'color-palette', color: '#F3E5F5' },
+        { id: 'c3', name: 'Business', icon: 'briefcase', color: '#E8F5E9' },
+        { id: 'c4', name: 'Marketing', icon: 'megaphone', color: '#FFF3E0' },
+    ];
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* SEARCH BAR */}
             <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+                <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
                 <TextInput
                     style={styles.searchInput}
-                    placeholder="Search..."
-                    value={searchTerm}
-                    onChangeText={setSearchTerm}
-                    onSubmitEditing={() => handleSearch()}
+                    placeholder="Search courses, mentors, or skills..."
+                    value={search}
+                    onChangeText={setSearch}
                     returnKeyType="search"
+                    onSubmitEditing={handleSearch}
                 />
             </View>
 
-            {showFilters && (
-                <View style={styles.filterContainer}>
-                    <TouchableOpacity
-                        style={[styles.filterButton, filterType === 'people' && styles.activeFilter]}
-                        onPress={() => handleFilterChange('people')}
-                    >
-                        <Text style={[styles.filterText, filterType === 'people' && styles.activeFilterText]}>People</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.filterButton, filterType === 'courses' && styles.activeFilter]}
-                        onPress={() => handleFilterChange('courses')}
-                    >
-                        <Text style={[styles.filterText, filterType === 'courses' && styles.activeFilterText]}>Courses</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.filterButton, filterType === 'bits' && styles.activeFilter]}
-                        onPress={() => handleFilterChange('bits')}
-                    >
-                        <Text style={[styles.filterText, filterType === 'bits' && styles.activeFilterText]}>Bits</Text>
+            <ScrollView 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl 
+                        refreshing={refreshing} 
+                        onRefresh={onRefresh} 
+                        colors={["#2196F3"]} // Android loader color
+                        tintColor="#2196F3" // iOS loader color
+                    />
+                }
+            >
+                {/* 1. TRENDING BITS */}
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Trending Quick Insights</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('AllBits')}>
+                        <Text style={styles.seeAll}>See All</Text>
                     </TouchableOpacity>
                 </View>
-            )}
 
-            {isLoading ? (
-                <ActivityIndicator size="large" color="tomato" style={{ marginTop: 50 }}/>
-            ) : (
+                {loading ? <ActivityIndicator color="#2196F3" /> : (
+                    <FlatList
+                        horizontal
+                        data={trendingBits}
+                        keyExtractor={item => item._id}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingLeft: 15 }}
+                        renderItem={({ item, index }) => (
+                            <TouchableOpacity 
+                                style={styles.bitCard}
+                                onPress={() => navigation.navigate('ProfileBitsPlayer', { bits: trendingBits, initialScrollIndex: index })}
+                            >
+                                <Image source={{ uri: item.videoUrl?.replace(/\.(mp4|mov|avi)$/, '.jpg') }} style={styles.bitThumb} />
+                                <View style={styles.bitOverlay}><Ionicons name="play" size={20} color="white" /></View>
+                                <Text style={styles.bitTitle} numberOfLines={1}>{item.title || "Video Bit"}</Text>
+                            </TouchableOpacity>
+                        )}
+                    />
+                )}
+
+                {/* 2. RECOMMENDED COURSES (Restored Section) */}
+                <View style={[styles.sectionHeader, { marginTop: 25 }]}>
+                    <Text style={styles.sectionTitle}>Recommended for You</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('SearchResults', { query: '' })}>
+                        <Text style={styles.seeAll}>View All</Text>
+                    </TouchableOpacity>
+                </View>
+
                 <FlatList
-                    data={results}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => item._id}
-                    ListEmptyComponent={() => <Text style={styles.messageText}>{message}</Text>}
+                    horizontal
+                    data={recommendedCourses}
+                    keyExtractor={item => item._id}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingLeft: 15 }}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity 
+                            style={styles.courseCard}
+                            onPress={() => navigation.navigate('CourseDetail', { courseId: item._id })}
+                        >
+                            <Image source={{ uri: item.thumbnailUrl || 'https://via.placeholder.com/150' }} style={styles.courseThumb} />
+                            <Text style={styles.courseTitle} numberOfLines={2}>{item.title}</Text>
+                            <Text style={styles.courseInstructor}>By {item.mentor?.username || 'Expert'}</Text>
+                        </TouchableOpacity>
+                    )}
                 />
-            )}
+
+                {/* 3. CATEGORY GRID */}
+                <Text style={[styles.sectionTitle, { marginLeft: 15, marginTop: 25, marginBottom: 15 }]}>Browse Categories</Text>
+                <View style={styles.categoryGrid}>
+                    {categories.map(cat => (
+                        <TouchableOpacity 
+                            key={cat.id} 
+                            style={[styles.catBox, { backgroundColor: cat.color }]}
+                            onPress={() => navigation.navigate('SearchResults', { query: cat.name })}
+                        >
+                            <Ionicons name={cat.icon} size={28} color="#333" />
+                            <Text style={styles.catName}>{cat.name}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <View style={{ height: 40 }} /> 
+            </ScrollView>
         </SafeAreaView>
     );
 };
@@ -147,37 +162,33 @@ const styles = StyleSheet.create({
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f0f0f0',
+        backgroundColor: '#f0f2f5',
+        margin: 15,
         borderRadius: 10,
-        marginHorizontal: 15,
-        marginTop: 10,
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
     },
-    searchIcon: { marginRight: 10 },
-    searchInput: { flex: 1, height: 45, fontSize: 16 },
-    filterContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    filterButton: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#e9e9e9' },
-    activeFilter: { backgroundColor: 'tomato' },
-    filterText: { fontWeight: '600', color: '#555' },
-    activeFilterText: { color: '#fff' },
-    messageText: { textAlign: 'center', marginTop: 50, fontSize: 16, color: '#888' },
-    resultItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
-    },
-    resultTextContainer: { flex: 1, marginLeft: 15 },
-    resultText: { fontSize: 16, fontWeight: '600' },
-    resultSubText: { fontSize: 14, color: '#888' },
+    searchIcon: { marginRight: 8 },
+    searchInput: { flex: 1, height: 45, fontSize: 15 },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 15, marginBottom: 12 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1c1e21' },
+    seeAll: { color: '#2196F3', fontWeight: 'bold' },
+    
+    // Bits Styles
+    bitCard: { width: 120, marginRight: 12 },
+    bitThumb: { width: 120, height: 180, borderRadius: 12, backgroundColor: '#eee' },
+    bitOverlay: { position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 4 },
+    bitTitle: { marginTop: 6, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
+    // Course Recommendation Styles
+    courseCard: { width: 200, marginRight: 15 },
+    courseThumb: { width: 200, height: 110, borderRadius: 10, backgroundColor: '#f9f9f9' },
+    courseTitle: { fontSize: 14, fontWeight: 'bold', marginTop: 8, color: '#333' },
+    courseInstructor: { fontSize: 12, color: '#666', marginTop: 2 },
+
+    // Category Styles
+    categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, justifyContent: 'space-between' },
+    catBox: { width: '47%', height: 100, borderRadius: 12, padding: 15, marginBottom: 15, justifyContent: 'center', alignItems: 'center' },
+    catName: { marginTop: 8, fontWeight: 'bold', color: '#333' }
 });
 
 export default ExploreScreen;

@@ -19,11 +19,11 @@ router.post('/register', async (req, res) => {
         if (user) {
             return res.status(400).json({ msg: 'User with that email or username already exists' });
         }
-        
+
         console.log('[DEBUG] Checking for existing mobile number...');
         let mobileUser = await User.findOne({ mobileNumber });
         if (mobileUser) {
-             return res.status(400).json({ msg: 'This mobile number is already registered' });
+            return res.status(400).json({ msg: 'This mobile number is already registered' });
         }
 
         console.log('[DEBUG] Creating new user...');
@@ -36,14 +36,14 @@ router.post('/register', async (req, res) => {
             email,
             password
         });
-        
+
         console.log('[DEBUG] Hashing password...');
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
-        
+
         await user.save();
         console.log(`[SUCCESS] User ${username} registered successfully.`);
-        
+
         res.status(201).json({ msg: 'User registered successfully' });
 
     } catch (err) {
@@ -56,9 +56,9 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     console.log('--- New Login Request ---');
     console.log(`[${new Date().toLocaleTimeString()}] Received login request for email:`, req.body.email);
-    
+
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
         console.log('[DEBUG] Login failed: Email or password not provided.');
         return res.status(400).json({ msg: 'Please provide an email and password.' });
@@ -87,15 +87,41 @@ router.post('/login', async (req, res) => {
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: 3600 }, // Expires in 1 hour
+            { expiresIn: 3600 },
             (err, token) => {
                 if (err) throw err;
-                console.log(`[SUCCESS] JWT token created for user ${email}. Sending token to client.`);
-                res.json({ token });
+                console.log(`[SUCCESS] JWT token created for user ${email}.`);
+
+                // FIX: Include the user object in the response
+                res.json({
+                    token,
+                    user: {
+                        id: user.id,
+                        username: user.username,
+                        email: user.email,
+                        firstName: user.firstName,
+                        lastName: user.lastName,
+                        profilePictureUrl: user.profilePictureUrl
+                    }
+                });
             }
         );
     } catch (err) {
         console.error('[ERROR] An error occurred during login:', err.message);
+        res.status(500).send('Server error');
+    }
+});
+
+// @route   GET api/auth/check-username/:username
+// @desc    Check if a username is already taken
+router.get('/check-username/:username', async (req, res) => {
+    try {
+        const user = await User.findOne({ username: req.params.username.toLowerCase() });
+        if (user) {
+            return res.json({ available: false });
+        }
+        res.json({ available: true });
+    } catch (err) {
         res.status(500).send('Server error');
     }
 });

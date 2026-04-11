@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Image, TouchableOpacity } from 'react-native';
+import { 
+    View, Text, TextInput, StyleSheet, ScrollView, Alert, 
+    Image, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform 
+} from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config';
@@ -13,6 +16,7 @@ const EditProfileScreen = ({ navigation }) => {
     const [profilePictureUrl, setProfilePictureUrl] = useState('');
     const [newImage, setNewImage] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         const loadUserData = async () => {
@@ -53,18 +57,17 @@ const EditProfileScreen = ({ navigation }) => {
     };
 
     const handleSave = async () => {
-        setIsLoading(true);
+        setIsSaving(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
             let finalImageUrl = profilePictureUrl;
 
-            // Step 1: If a new image was picked, upload it first
             if (newImage) {
                 const formData = new FormData();
                 formData.append('image', {
                     uri: newImage.uri,
-                    name: `profile-pic.${newImage.uri.split('.').pop()}`,
-                    type: `image/${newImage.uri.split('.').pop()}`,
+                    name: `profile-pic.jpg`,
+                    type: `image/jpeg`,
                 });
                 const uploadResponse = await axios.post(`${API_URL}/upload/image`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data', 'x-auth-token': token },
@@ -72,78 +75,203 @@ const EditProfileScreen = ({ navigation }) => {
                 finalImageUrl = uploadResponse.data.imageUrl;
             }
 
-            // Step 2: Update the profile with all data
             const updatedProfile = { firstName, lastName, bio, profilePictureUrl: finalImageUrl };
+
             await axios.put(`${API_URL}/profile`, updatedProfile, {
                 headers: { 'x-auth-token': token }
             });
 
-            Alert.alert("Success", "Your profile has been updated.");
-            navigation.navigate('MainApp', { screen: 'Profile' });
+            Alert.alert("Success ✨", "Profile updated successfully!");
+            navigation.goBack();
         } catch (error) {
             Alert.alert("Error", "Failed to update profile.");
-            console.error("Update profile error:", error.response?.data || error);
         } finally {
-            setIsLoading(false);
+            setIsSaving(false);
         }
     };
 
-    return (
-        <ScrollView style={styles.container}>
-            <View style={styles.pfpContainer}>
-                {newImage ? (
-                    <Image source={{ uri: newImage.uri }} style={styles.profilePicture} />
-                ) : profilePictureUrl ? (
-                    <Image source={{ uri: profilePictureUrl }} style={styles.profilePicture} />
-                ) : (
-                    <Ionicons name="person-circle" size={120} color="#ccc" />
-                )}
-                <Button title="Change Profile Picture" onPress={pickImage} />
+    if (isLoading) {
+        return (
+            <View style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color="#2196F3" />
             </View>
+        );
+    }
 
-            <Text style={styles.label}>First Name</Text>
-            <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} />
-            
-            <Text style={styles.label}>Last Name</Text>
-            <TextInput style={styles.input} value={lastName} onChangeText={setLastName} />
+    return (
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.container}
+        >
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                
+                {/* 1. PROFILE PICTURE SECTION */}
+                <View style={styles.pfpSection}>
+                    <TouchableOpacity onPress={pickImage} activeOpacity={0.8}>
+                        <View style={styles.imageWrapper}>
+                            {newImage ? (
+                                <Image source={{ uri: newImage.uri }} style={styles.profilePicture} />
+                            ) : profilePictureUrl ? (
+                                <Image source={{ uri: profilePictureUrl }} style={styles.profilePicture} />
+                            ) : (
+                                <View style={styles.defaultPfp}>
+                                    <Ionicons name="person" size={50} color="#A0AEC0" />
+                                </View>
+                            )}
+                            <View style={styles.cameraIconBadge}>
+                                <Ionicons name="camera" size={18} color="#fff" />
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                    <Text style={styles.changePhotoText}>Tap to change photo</Text>
+                </View>
 
-            <Text style={styles.label}>Bio</Text>
-            <TextInput
-                style={styles.inputMulti}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell us a little about yourself"
-                multiline
-                maxLength={150}
-            />
-            
-            <Button title={isLoading ? "Saving..." : "Save Changes"} onPress={handleSave} disabled={isLoading} />
-        </ScrollView>
+                {/* 2. INFORMATION CARD */}
+                <View style={styles.card}>
+                    <Text style={styles.inputLabel}>Personal Info</Text>
+                    
+                    <View style={styles.inputGroup}>
+                        <Ionicons name="person-outline" size={20} color="#A0AEC0" style={styles.inputIcon} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="First Name" 
+                            value={firstName} 
+                            onChangeText={setFirstName} 
+                            placeholderTextColor="#CBD5E0"
+                        />
+                    </View>
+                    
+                    <View style={styles.divider} />
+
+                    <View style={styles.inputGroup}>
+                        <Ionicons name="person-outline" size={20} color="#A0AEC0" style={styles.inputIcon} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Last Name" 
+                            value={lastName} 
+                            onChangeText={setLastName} 
+                            placeholderTextColor="#CBD5E0"
+                        />
+                    </View>
+                </View>
+
+                {/* 3. BIO CARD */}
+                <View style={styles.card}>
+                    <Text style={styles.inputLabel}>About You</Text>
+                    <TextInput
+                        style={styles.inputMulti}
+                        value={bio}
+                        onChangeText={setBio}
+                        placeholder="Tell us a little about yourself..."
+                        placeholderTextColor="#CBD5E0"
+                        multiline
+                        maxLength={150}
+                    />
+                    <Text style={styles.charCount}>{bio.length}/150</Text>
+                </View>
+
+                {/* 4. SAVE BUTTON */}
+                <TouchableOpacity 
+                    style={[styles.saveBtn, isSaving && styles.disabledBtn]} 
+                    onPress={handleSave}
+                    disabled={isSaving}
+                >
+                    {isSaving ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.saveBtnText}>Save Changes</Text>
+                    )}
+                </TouchableOpacity>
+
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-    pfpContainer: { alignItems: 'center', marginBottom: 20 },
-    profilePicture: { width: 120, height: 120, borderRadius: 60, marginBottom: 10, backgroundColor: '#eee' },
-    label: { fontSize: 16, fontWeight: 'bold', marginBottom: 5, marginTop: 15 },
-    input: {
-        height: 45,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 5,
-        paddingLeft: 10,
-        backgroundColor: '#f9f9f9',
+    container: { flex: 1, backgroundColor: '#F7FAFC' },
+    scrollContent: { padding: 20 },
+    loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+    // PFP Styles
+    pfpSection: { alignItems: 'center', marginBottom: 30, marginTop: 10 },
+    imageWrapper: {
+        width: 110,
+        height: 110,
+        borderRadius: 55,
+        backgroundColor: '#EDF2F7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#fff',
+        // Shadow for the avatar circle
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
+    profilePicture: { width: 110, height: 110, borderRadius: 55 },
+    defaultPfp: { width: 110, height: 110, borderRadius: 55, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
+    cameraIconBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#2196F3',
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#fff'
+    },
+    changePhotoText: { marginTop: 12, color: '#2196F3', fontWeight: '600', fontSize: 14 },
+
+    // Card & Input Styles
+    card: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+        marginBottom: 20
+    },
+    inputLabel: { fontSize: 12, fontWeight: '700', color: '#718096', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 15 },
+    inputGroup: { flexDirection: 'row', alignItems: 'center' },
+    inputIcon: { marginRight: 12 },
+    input: { flex: 1, fontSize: 16, color: '#2D3748', paddingVertical: 10 },
+    divider: { height: 1, backgroundColor: '#F7FAFC', marginVertical: 10 },
+    
     inputMulti: {
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 5,
-        padding: 10,
-        minHeight: 100,
+        fontSize: 16,
+        color: '#2D3748',
+        minHeight: 80,
         textAlignVertical: 'top',
-        backgroundColor: '#f9f9f9',
+        lineHeight: 22
     },
+    charCount: { textAlign: 'right', fontSize: 12, color: '#A0AEC0', marginTop: 8 },
+
+    // Save Button
+    saveBtn: {
+        backgroundColor: '#2196F3',
+        height: 56,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#2196F3',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+        elevation: 5,
+        marginTop: 10,
+        marginBottom: 40
+    },
+    disabledBtn: { backgroundColor: '#A0AEC0', shadowOpacity: 0 },
+    saveBtnText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
 });
 
 export default EditProfileScreen;

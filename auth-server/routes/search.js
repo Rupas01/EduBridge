@@ -1,72 +1,28 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const auth = require('../middleware/auth');
 const Course = require('../models/Course');
+const User = require('../models/User');
+const Post = require('../models/Post');
 const Bit = require('../models/Bit');
 
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
+    const query = req.query.q;
+    if (!query) return res.status(400).json({ msg: "Empty search query" });
+
     try {
-        const { term, type } = req.query;
-        if (!term) {
-            return res.json([]);
-        }
+        const regex = { $regex: query, $options: 'i' };
 
-        const regex = new RegExp(term, 'i');
-        let results = [];
+        const [courses, people, posts, bits] = await Promise.all([
+            Course.find({ $or: [{ title: regex }, { category: regex }] }).populate('mentor', 'username').limit(5),
+            User.find({ username: regex }).select('username profilePictureUrl bio').limit(5),
+            Post.find({ content: regex }).populate('user', 'username').limit(5),
+            // FIX: Changed .populate('user') to .populate('creator')
+            Bit.find({ title: regex }).populate('creator', 'username').limit(5)
+        ]);
 
-        // First, find any users whose names match the search term.
-        const matchingUsers = await User.find({
-            $or: [{ firstName: regex }, { lastName: regex }, { username: regex }]
-        }).select('_id');
-        const userIds = matchingUsers.map(user => user._id);
-
-        // Now, perform the search based on the filter type.
-        switch (type) {
-            case 'people':
-                results = await User.find({ _id: { $in: userIds } }).select('-password');
-                break;
-            
-            case 'courses':
-                results = await Course.find({
-                    $or: [
-                        { title: regex },
-                        { description: regex },
-                        { mentor: { $in: userIds } } // Also find courses by matching mentors
-                    ]
-                }).populate('mentor', 'firstName lastName');
-                break;
-
-            case 'bits':
-                results = await Bit.find({
-                    $or: [
-                        { title: regex },
-                        { creator: { $in: userIds } } // Also find bits by matching creators
-                    ]
-                }).populate('creator', 'firstName lastName');
-                break;
-
-            case 'all':
-                 const [people, courses, bits] = await Promise.all([
-                    User.find({ _id: { $in: userIds } }).select('-password').lean(),
-                    Course.find({ $or: [{ title: regex }, { mentor: { $in: userIds } }] }).populate('mentor', 'firstName lastName').lean(),
-                    Bit.find({ $or: [{ title: regex }, { creator: { $in: userIds } }] }).populate('creator', 'firstName lastName').lean()
-                ]);
-                results = [
-                    ...people.map(item => ({ ...item, __type: 'people' })),
-                    ...courses.map(item => ({ ...item, __type: 'courses' })),
-                    ...bits.map(item => ({ ...item, __type: 'bits' }))
-                ];
-                break;
-
-            default:
-                // If the type is unknown, just search for people by default or return an error
-                results = await User.find({ _id: { $in: userIds } }).select('-password');
-        }
-        
-        res.json(results);
-
+        res.json({ courses, people, posts, bits });
     } catch (err) {
-        console.error(err.message);
         res.status(500).send('Server Error');
     }
 });

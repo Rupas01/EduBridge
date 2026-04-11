@@ -36,6 +36,10 @@ const UserSchema = new mongoose.Schema({
         type: String,
         maxlength: 150
     },
+    savedCourses: [{ 
+        type: Schema.Types.ObjectId,
+        ref: 'Course'
+    }],
 });
 
 module.exports = mongoose.model('User', UserSchema);

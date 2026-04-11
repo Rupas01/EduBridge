@@ -8,8 +8,6 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import AddModuleScreen from './screens/AddModuleScreen';
 import ManualQuizAddScreen from './screens/ManualQuizAddScreen';
 import QuizAttemptScreen from './screens/QuizAttemptScreen';
-
-// Import all the necessary screens
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import CreateCourseScreen from './screens/CreateCourseScreen';
@@ -19,8 +17,16 @@ import VideoPlayerScreen from './screens/VideoPlayerScreen';
 import AddLessonScreen from './screens/AddLessonScreen';
 import LessonContentScreen from './screens/LessonContentScreen';
 import ProfileBitsPlayerScreen from './screens/ProfileBitsPlayerScreen';
-import ProfileScreen from './screens/ProfileScreen'; 
+import ProfileScreen from './screens/ProfileScreen';
 import CourseDashboardScreen from './screens/CourseDashboardScreen';
+import CreatePostScreen from './screens/CreatePostScreen';
+import CommentsScreen from './screens/CommentsScreen';
+import SearchResults from './screens/SearchResults';
+import AllBits from './screens/AllBits';
+import UserProfileScreen from './screens/UserProfileScreen';
+import WelcomeScreen from './screens/WelcomeScreen';
+import ChatScreen from './screens/ChatScreen';
+import MessengerScreen from './screens/MessengerScreen'
 
 // Import the main Tab Navigator
 import TabNavigator from './navigation/TabNavigator';
@@ -32,27 +38,20 @@ export default function App() {
     // 3. Wrap the entire app in SafeAreaProvider
     <SafeAreaProvider>
       <NavigationContainer>
-        <Stack.Navigator initialRouteName="Login">
-          {/* Screens for users who are NOT logged in */}
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Register"
-            component={RegisterScreen}
-            options={{ title: 'Create Account' }}
-          />
-
-          {/* Main App Screen for LOGGED-IN users */}
+        <Stack.Navigator initialRouteName="Welcome">
+          <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
           <Stack.Screen
             name="MainApp"
             component={TabNavigator}
             options={{ headerShown: false }}
           />
-
-          {/* Additional screens */}
+          <Stack.Screen
+            name="AllBits"
+            component={AllBits}
+            options={{ title: 'All Bits' }}
+          />
           <Stack.Screen
             name="CreateCourse"
             component={CreateCourseScreen}
@@ -92,10 +91,6 @@ export default function App() {
             options={{ headerShown: false }}
           />
           <Stack.Screen
-            name="UserProfile"
-            component={ProfileScreen}
-          />
-          <Stack.Screen
             name="Settings"
             component={SettingsScreen}
           />
@@ -118,6 +113,45 @@ export default function App() {
             name="CourseDashboard"
             component={CourseDashboardScreen}
             options={{ title: 'My Progress' }}
+          />
+          <Stack.Screen
+            name="CreatePost"
+            component={CreatePostScreen}
+            options={{
+              headerShown: false, // We built a custom header in the screen
+              presentation: 'modal' // Optional: Makes it slide up from the bottom like Instagram/X
+            }}
+          />
+          <Stack.Screen
+            name="Comments"
+            component={CommentsScreen}
+            options={{
+              title: 'Comments',
+              headerBackTitleVisible: false, // Cleaner look for iOS
+            }}
+          />
+          <Stack.Screen
+            name="SearchResults"
+            component={SearchResults}
+            options={{ headerShown: false }} // This eliminates the top ribbon
+          />
+          <Stack.Screen
+            name="UserProfile"
+            component={UserProfileScreen} // Use the wrapper we created
+            options={{
+              title: 'Profile',
+              headerBackTitleVisible: false
+            }}
+          />
+          <Stack.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={({ route }) => ({ title: route.params.name })}
+          />
+          <Stack.Screen
+            name="Messenger"
+            component={MessengerScreen}
+            options={{ title: 'Messages' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

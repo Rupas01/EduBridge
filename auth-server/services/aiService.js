@@ -7,7 +7,8 @@ const callAIService = async (prompt) => {
             "https://openrouter.ai/api/v1/chat/completions",
             {
                 // We'll use the most stable free model path
-                model: "arcee-ai/trinity-mini:free", 
+                // model: "arcee-ai/trinity-mini:free", 
+                model: "nvidia/nemotron-3-super-120b-a12b:free", 
                 messages: [
                     {
                         role: "system",
