@@ -19,10 +19,11 @@ const SearchResults = ({ route, navigation }) => {
     const [loading, setLoading] = useState(true);
 
     const performSearch = useCallback(async (query) => {
-        if (!query.trim()) return;
+        // FIXED: Removed the early return that was causing the infinite loading spinner
         setLoading(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
+            // Sending the query (even if empty) to the backend to get "All" results
             const res = await axios.get(`${API_URL}/search?q=${query}`, {
                 headers: { 'x-auth-token': token }
             });

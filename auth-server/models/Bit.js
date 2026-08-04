@@ -11,7 +11,7 @@ const BitSchema = new Schema({
         type: String,
         required: true
     },
-    videoUrl: { // In the future, this would point to the video file
+    videoUrl: {
         type: String,
     },
     createdAt: {
