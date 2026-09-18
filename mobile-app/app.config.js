@@ -1,31 +1,49 @@
 import 'dotenv/config';
 
 export default {
-  "expo": {
-    "name": "mobile-app-v2",
-    "slug": "mobile-app-v2",
-    "version": "1.0.0",
-    "android": {
-      "package": "com.rupas50.edubridgev2"
+  expo: {
+    name: "EduBridge",
+    slug: "mobile-app-v2",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "light",
+    newArchEnabled: true,
+    splash: {
+      image: "./assets/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#ffffff"
     },
-    "ios": {
-      "bundleIdentifier": "com.rupas50.edubridgev2"
+    android: {
+      package: "com.rupas.edubridge",
+      edgeToEdgeEnabled: true,
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#ffffff"
+      }
     },
-    "plugins": [
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: "com.rupas50.edubridgev2"
+    },
+    web: {
+      favicon: "./assets/favicon.png"
+    },
+    plugins: [
       "expo-font",
       "expo-video",
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app needs access to your photos to let you upload course thumbnails and lesson videos.",
-          "videosPermission": "The app needs access to your videos to let you upload lesson videos."
+          photosPermission: "The app needs access to your photos to let you upload course thumbnails and lesson videos.",
+          videosPermission: "The app needs access to your videos to let you upload lesson videos."
         }
       ]
     ],
-    "extra": {
-      "apiUrl": process.env.EXPO_PUBLIC_API_URL,
-      "eas": {
-        "projectId": "5062bd9a-908a-4b8b-8b17-dec64a367636" // Note: This is your old projectId. You might get a new one when you run `eas build:configure`.
+    extra: {
+      apiUrl: process.env.EXPO_PUBLIC_API_URL,
+      eas: {
+        projectId: "bc29f4c6-b022-470f-96c0-accc14434656"
       }
     }
   }
