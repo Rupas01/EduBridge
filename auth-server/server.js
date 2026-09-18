@@ -29,6 +29,9 @@ app.use('/api/courses', require('./routes/courses'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/lessons', require('./routes/lessons'));
 app.use('/api/quizzes', require('./routes/quizzes'));
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'EduBridge API is running!' });
+});
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
