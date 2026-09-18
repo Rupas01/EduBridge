@@ -3,7 +3,7 @@ import 'dotenv/config';
 export default {
   expo: {
     name: "EduBridge",
-    slug: "mobile-app-v2",
+    slug: "EduBridge",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
